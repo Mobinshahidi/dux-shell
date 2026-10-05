@@ -477,6 +477,34 @@ Singleton {
         return value.toLowerCase().includes(pattern.toLowerCase());
     }
 
+    // Popup-routing gate: a notification renders as an overlay popup window
+    // (instead of the island notification face) when any enabled notification
+    // rule matches it. Rules are the single source of truth — edit patterns
+    // in Settings → Notifications → Rules and routing + popup auto-expand
+    // both follow. ignore/mute rules never route to popup.
+    function isPopupRouted(wrapper) {
+        if (!wrapper)
+            return false;
+        const rules = SettingsData.notificationRules || [];
+        if (!rules.length)
+            return false;
+        const info = {
+            "appName": wrapper.appName || "",
+            "desktopEntry": (wrapper.notification && wrapper.notification.desktopEntry) || "",
+            "summary": wrapper.summary || "",
+            "body": wrapper.body || ""
+        };
+        for (const rule of rules) {
+            if (!_matchesNotificationRule(rule, info))
+                continue;
+            const action = (rule.action || "default").toString().toLowerCase();
+            if (action === "ignore" || action === "mute")
+                continue;
+            return true;
+        }
+        return false;
+    }
+
     function _allowedInDnd(urgency, bypassDnd) {
         return bypassDnd || (SettingsData.notificationDndAllowCritical && urgency === NotificationUrgency.Critical);
     }

@@ -12,7 +12,8 @@ FocusScope {
     property var transientSurfaceTracker: null
     property bool popout: false
 
-    property string activeTab: "recents"
+    // Single tab — no saved/recents split
+    readonly property string activeTab: "recents"
     property bool showKeyboardHints: false
     property int activeImageLoads: 0
     readonly property int maxConcurrentLoads: 3
@@ -37,6 +38,7 @@ FocusScope {
     property alias searchField: historyContent.searchField
     property alias editorView: editorView
     property alias keyboardController: keyboardController
+    property alias moveMode: historyContent.moveMode
     readonly property alias contextMenuActive: historyContent.contextMenuActive
 
     function closeContextMenu() {
@@ -46,19 +48,6 @@ FocusScope {
     signal closeRequested
     signal instantCloseRequested
 
-    onActiveTabChanged: {
-        if (activeTab === "saved" && pinnedCount === 0) {
-            activeTab = "recents";
-            return;
-        }
-        ClipboardService.selectedIndex = 0;
-        ClipboardService.keyboardNavigationActive = true;
-    }
-    onPinnedCountChanged: {
-        if (activeTab === "saved" && pinnedCount === 0) {
-            activeTab = "recents";
-        }
-    }
     onSearchTextChanged: ClipboardService.searchText = searchText
     onCurrentEntryChanged: {
         if (mode === "preview" && !ClipboardService.canPreviewEntry(currentEntry)) {
@@ -120,7 +109,7 @@ FocusScope {
     }
 
     function openPreview(index = selectedIndex) {
-        const entries = activeTab === "saved" ? pinnedEntries : unpinnedEntries;
+        const entries = clipboardEntries;
         if (!ClipboardService.canPreviewEntry(entries[index])) {
             return;
         }
@@ -138,7 +127,7 @@ FocusScope {
     }
 
     function selectedEntry() {
-        const entries = activeTab === "saved" ? pinnedEntries : unpinnedEntries;
+        const entries = clipboardEntries;
         if (!entries || entries.length === 0 || selectedIndex < 0 || selectedIndex >= entries.length)
             return null;
         return entries[selectedIndex];

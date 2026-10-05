@@ -13,7 +13,7 @@ Item {
     property alias searchField: searchField
     property alias clipboardListView: clipboardListView
 
-    readonly property var entries: modal.activeTab === "saved" ? modal.pinnedEntries : modal.unpinnedEntries
+    readonly property var entries: modal.clipboardEntries
 
     readonly property var filterOptions: [I18n.tr("All"), I18n.tr("Text"), I18n.tr("Long Text"), I18n.tr("Image", "noun, clipboard entry type and filter option")]
     readonly property var filterValues: ["all", "text", "long_text", "image"]
@@ -45,7 +45,7 @@ Item {
 
     function contextEntryAtLocal(localX, localY) {
         const listView = clipboardListView;
-        const entries = modal.activeTab === "saved" ? modal.pinnedEntries : modal.unpinnedEntries;
+        const entries = modal.clipboardEntries;
 
         if (!listView.visible || !entries)
             return null;
@@ -251,7 +251,7 @@ Item {
             }
 
             StyledText {
-                text: !clipboardContent.modal.clipboardAvailable ? I18n.tr("Connecting to clipboard service...") : clipboardContent.modal.activeTab === "saved" ? I18n.tr("No saved clipboard entries") : I18n.tr("No recent clipboard entries found")
+                text: !clipboardContent.modal.clipboardAvailable ? I18n.tr("Connecting to clipboard service...") : I18n.tr("No clipboard entries found")
                 anchors.centerIn: parent
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceVariantText
@@ -271,17 +271,12 @@ Item {
                 listView: clipboardListView
                 onCopyRequested: clipboardContent.modal.copyEntry(modelData)
                 onPasteRequested: clipboardContent.modal.pasteEntry(modelData)
-                onDeleteRequested: {
-                    if (clipboardContent.modal.activeTab === "saved") {
-                        clipboardContent.modal.deletePinnedEntry(modelData);
-                        return;
-                    }
-                    clipboardContent.modal.deleteEntry(modelData);
-                }
+                onDeleteRequested: clipboardContent.modal.deleteEntry(modelData)
                 onPinRequested: targetEntry => clipboardContent.modal.pinEntry(targetEntry)
                 onUnpinRequested: targetEntry => clipboardContent.modal.unpinEntry(targetEntry)
                 onEditRequested: clipboardContent.modal.editEntry(modelData)
                 onPreviewRequested: clipboardContent.modal.openPreview(index)
+                onRevealRequested: ClipboardService.toggleRevealEntry(modelData)
                 onContextMenuRequested: (mouseX, mouseY) => {
                     const pos = mapToItem(null, mouseX, mouseY);
                     clipboardContent.showContextMenu(modelData, pos.x, pos.y);
@@ -311,6 +306,75 @@ Item {
         sourceComponent: ClipboardKeyboardHints {
             pasteAvailable: modal.pasteAvailable
             enterToPaste: SettingsData.clipboardEnterToPaste
+        }
+    }
+
+    // ── Move-to-position overlay ──────────────────────────────────────
+    property bool moveMode: false
+
+    Rectangle {
+        id: moveOverlay
+        visible: clipboardContent.moveMode
+        anchors.centerIn: parent
+        width: 240
+        height: 80
+        radius: Theme.cornerRadius
+        color: Theme.floatingWindowSurface
+        border.color: Theme.outlineVariant
+        border.width: 1
+        z: 1000
+
+        Column {
+            anchors.centerIn: parent
+            spacing: Theme.spacingS
+
+            StyledText {
+                text: I18n.tr("Move to position:")
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Rectangle {
+                width: 180; height: 32; radius: Theme.cornerRadiusS
+                color: Theme.surfaceContainerHigh
+                border.color: moveInput.activeFocus ? Theme.primary : Theme.outlineVariant
+                border.width: moveInput.activeFocus ? 2 : 1
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                TextInput {
+                    id: moveInput
+                    anchors.fill: parent
+                    anchors.leftMargin: 8; anchors.rightMargin: 8
+                    color: Theme.surfaceText
+                    font.pixelSize: Theme.fontSizeMedium
+                    horizontalAlignment: Text.AlignHCenter
+                    validator: IntValidator { bottom: 1; top: 9999 }
+                    focus: clipboardContent.moveMode
+                    Keys.onReturnPressed: {
+                        const pos = parseInt(moveInput.text);
+                        if (!isNaN(pos) && pos > 0) {
+                            ClipboardService.moveToPosition(ClipboardService.selectedIndex, pos);
+                        }
+                        clipboardContent.moveMode = false;
+                        moveInput.text = "";
+                    }
+                    Keys.onEscapePressed: {
+                        clipboardContent.moveMode = false;
+                        moveInput.text = "";
+                    }
+                }
+            }
+        }
+
+        // Click outside to cancel
+        MouseArea {
+            anchors.fill: parent
+            z: -1
+            onClicked: {
+                clipboardContent.moveMode = false;
+                moveInput.text = "";
+            }
         }
     }
 }

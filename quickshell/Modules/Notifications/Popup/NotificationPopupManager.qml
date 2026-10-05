@@ -167,7 +167,9 @@ QtObject {
             }
         }
         for (const w of newWrappers) {
-            if (w && !_hasWindowFor(w) && NotificationService.isFocusedScreen(manager.modelData))
+            // Per-notification routing: only rule-matched wrappers become popup
+            // windows; everything else is left to the island notification face.
+            if (w && !_hasWindowFor(w) && NotificationService.isPopupRouted(w) && NotificationService.isFocusedScreen(manager.modelData))
                 _insertAtTop(w);
         }
         _syncingVisibleNotifications = false;

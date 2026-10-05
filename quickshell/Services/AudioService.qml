@@ -35,6 +35,31 @@ Singleton {
     readonly property var mediaDevices: soundsLoader.item?.mediaDevices ?? null
     property real notificationsVolume: 1.0
     property bool notificationsAudioMuted: false
+    // Per-app notification sound volume override: appName -> volume (0.0-1.0)
+    property var notificationAppVolumes: ({})
+    property string _pendingNotifApp: ""
+
+    function _notifVolumeForApp(appName) {
+        if (appName && notificationAppVolumes[appName] !== undefined)
+            return notificationAppVolumes[appName];
+        return notificationsVolume;
+    }
+
+    function setNotifAppVolume(appName, vol) {
+        if (!appName) return;
+        var v = Math.max(0.0, Math.min(1.0, vol));
+        var m = Object.assign({}, notificationAppVolumes);
+        m[appName] = v;
+        notificationAppVolumes = m;
+        console.log("[AudioService] per-app notif volume:", appName, "=", v);
+    }
+
+    function clearNotifAppVolume(appName) {
+        if (!appName) return;
+        var m = Object.assign({}, notificationAppVolumes);
+        delete m[appName];
+        notificationAppVolumes = m;
+    }
 
     Loader {
         id: soundsLoader

@@ -1,0 +1,629 @@
+diff --git a/quickshell/Modals/Clipboard/ClipboardActions.qml b/quickshell/Modals/Clipboard/ClipboardActions.qml
+index ea8eeebc..8adf5d2d 100644
+--- a/quickshell/Modals/Clipboard/ClipboardActions.qml
++++ b/quickshell/Modals/Clipboard/ClipboardActions.qml
+@@ -9,18 +9,6 @@ Row {
+ 
+     spacing: Theme.spacingS
+ 
+-    DankActionButton {
+-        Keys.forwardTo: [actions.modal.modalFocusScope]
+-        iconName: "push_pin"
+-        buttonSize: Theme.buttonHeightXXS
+-        iconSize: Theme.iconSizeSmall
+-        iconColor: actions.modal.activeTab === "saved" ? Theme.onPrimary : Theme.onSurfaceVariant
+-        backgroundColor: actions.modal.activeTab === "saved" ? Theme.primary : "transparent"
+-        visible: actions.modal.pinnedCount > 0 || actions.modal.activeTab === "saved"
+-        tooltipText: actions.modal.activeTab === "saved" ? I18n.tr("Recent", "clipboard button tooltip, switches to recent entries") : I18n.tr("Saved", "clipboard button tooltip, switches to saved entries")
+-        onClicked: actions.modal.activeTab = actions.modal.activeTab === "saved" ? "recents" : "saved"
+-    }
+-
+     DankActionButton {
+         Keys.forwardTo: [actions.modal.modalFocusScope]
+         objectName: "keyboardHints"
+diff --git a/quickshell/Modals/Clipboard/ClipboardContent.qml b/quickshell/Modals/Clipboard/ClipboardContent.qml
+index d5f76873..b63c5a06 100644
+--- a/quickshell/Modals/Clipboard/ClipboardContent.qml
++++ b/quickshell/Modals/Clipboard/ClipboardContent.qml
+@@ -13,7 +13,7 @@ Item {
+     property alias searchField: searchField
+     property alias clipboardListView: clipboardListView
+ 
+-    readonly property var entries: modal.activeTab === "saved" ? modal.pinnedEntries : modal.unpinnedEntries
++    readonly property var entries: modal.clipboardEntries
+ 
+     readonly property var filterOptions: [I18n.tr("All"), I18n.tr("Text"), I18n.tr("Long Text"), I18n.tr("Image", "noun, clipboard entry type and filter option")]
+     readonly property var filterValues: ["all", "text", "long_text", "image"]
+@@ -45,7 +45,7 @@ Item {
+ 
+     function contextEntryAtLocal(localX, localY) {
+         const listView = clipboardListView;
+-        const entries = modal.activeTab === "saved" ? modal.pinnedEntries : modal.unpinnedEntries;
++        const entries = modal.clipboardEntries;
+ 
+         if (!listView.visible || !entries)
+             return null;
+@@ -251,7 +251,7 @@ Item {
+             }
+ 
+             StyledText {
+-                text: !clipboardContent.modal.clipboardAvailable ? I18n.tr("Connecting to clipboard service...") : clipboardContent.modal.activeTab === "saved" ? I18n.tr("No saved clipboard entries") : I18n.tr("No recent clipboard entries found")
++                text: !clipboardContent.modal.clipboardAvailable ? I18n.tr("Connecting to clipboard service...") : I18n.tr("No clipboard entries found")
+                 anchors.centerIn: parent
+                 font.pixelSize: Theme.fontSizeMedium
+                 color: Theme.surfaceVariantText
+@@ -271,17 +271,12 @@ Item {
+                 listView: clipboardListView
+                 onCopyRequested: clipboardContent.modal.copyEntry(modelData)
+                 onPasteRequested: clipboardContent.modal.pasteEntry(modelData)
+-                onDeleteRequested: {
+-                    if (clipboardContent.modal.activeTab === "saved") {
+-                        clipboardContent.modal.deletePinnedEntry(modelData);
+-                        return;
+-                    }
+-                    clipboardContent.modal.deleteEntry(modelData);
+-                }
++                onDeleteRequested: clipboardContent.modal.deleteEntry(modelData)
+                 onPinRequested: targetEntry => clipboardContent.modal.pinEntry(targetEntry)
+                 onUnpinRequested: targetEntry => clipboardContent.modal.unpinEntry(targetEntry)
+                 onEditRequested: clipboardContent.modal.editEntry(modelData)
+                 onPreviewRequested: clipboardContent.modal.openPreview(index)
++                onRevealRequested: ClipboardService.toggleRevealEntry(modelData)
+                 onContextMenuRequested: (mouseX, mouseY) => {
+                     const pos = mapToItem(null, mouseX, mouseY);
+                     clipboardContent.showContextMenu(modelData, pos.x, pos.y);
+@@ -313,4 +308,73 @@ Item {
+             enterToPaste: SettingsData.clipboardEnterToPaste
+         }
+     }
++
++    // ── Move-to-position overlay ──────────────────────────────────────
++    property bool moveMode: false
++
++    Rectangle {
++        id: moveOverlay
++        visible: clipboardContent.moveMode
++        anchors.centerIn: parent
++        width: 240
++        height: 80
++        radius: Theme.cornerRadius
++        color: Theme.floatingWindowSurface
++        border.color: Theme.outlineVariant
++        border.width: 1
++        z: 1000
++
++        Column {
++            anchors.centerIn: parent
++            spacing: Theme.spacingS
++
++            StyledText {
++                text: I18n.tr("Move to position:")
++                font.pixelSize: Theme.fontSizeSmall
++                color: Theme.surfaceVariantText
++                anchors.horizontalCenter: parent.horizontalCenter
++            }
++
++            Rectangle {
++                width: 180; height: 32; radius: Theme.cornerRadiusS
++                color: Theme.surfaceContainerHigh
++                border.color: moveInput.activeFocus ? Theme.primary : Theme.outlineVariant
++                border.width: moveInput.activeFocus ? 2 : 1
++                anchors.horizontalCenter: parent.horizontalCenter
++
++                TextInput {
++                    id: moveInput
++                    anchors.fill: parent
++                    anchors.leftMargin: 8; anchors.rightMargin: 8
++                    color: Theme.surfaceText
++                    font.pixelSize: Theme.fontSizeMedium
++                    horizontalAlignment: Text.AlignHCenter
++                    validator: IntValidator { bottom: 1; top: 9999 }
++                    focus: clipboardContent.moveMode
++                    Keys.onReturnPressed: {
++                        const pos = parseInt(moveInput.text);
++                        if (!isNaN(pos) && pos > 0) {
++                            ClipboardService.moveToPosition(ClipboardService.selectedIndex, pos);
++                        }
++                        clipboardContent.moveMode = false;
++                        moveInput.text = "";
++                    }
++                    Keys.onEscapePressed: {
++                        clipboardContent.moveMode = false;
++                        moveInput.text = "";
++                    }
++                }
++            }
++        }
++
++        // Click outside to cancel
++        MouseArea {
++            anchors.fill: parent
++            z: -1
++            onClicked: {
++                clipboardContent.moveMode = false;
++                moveInput.text = "";
++            }
++        }
++    }
+ }
+diff --git a/quickshell/Modals/Clipboard/ClipboardEntry.qml b/quickshell/Modals/Clipboard/ClipboardEntry.qml
+index 88afe8fc..55e1f2f5 100644
+--- a/quickshell/Modals/Clipboard/ClipboardEntry.qml
++++ b/quickshell/Modals/Clipboard/ClipboardEntry.qml
+@@ -17,6 +17,7 @@ DankListItem {
+     signal unpinRequested(var targetEntry)
+     signal editRequested
+     signal previewRequested
++    signal revealRequested
+ 
+     readonly property string entryType: modal ? modal.getEntryType(entry) : "text"
+     readonly property string entryPreview: modal ? modal.getEntryPreview(entry) : ""
+@@ -31,7 +32,7 @@ DankListItem {
+     readonly property bool showDeleteAction: visibleEntryActions.includes("delete")
+     readonly property bool showPreviewAction: ClipboardService.canPreviewEntry(entry)
+     readonly property bool showPinnedIndicator: effectivePinned && !showPinAction
+-    readonly property bool showAnyAction: showCopyAction || showPasteAction || showPinAction || showEditAction || showDeleteAction || showPinnedIndicator || showPreviewAction
++    readonly property bool showAnyAction: showCopyAction || showPasteAction || showPinAction || showEditAction || showDeleteAction || showPinnedIndicator || showPreviewAction || ClipboardService.isEntrySecret(entry) || !!ClipboardService._revealedEntries[entry.id]
+ 
+     keyForwardTargets: [modal.modalFocusScope]
+     firstInGroup: itemIndex === 0
+@@ -145,6 +146,17 @@ DankListItem {
+             visible: root.showDeleteAction
+             onClicked: deleteRequested()
+         }
++
++        // Secret reveal toggle
++        DankActionButton {
++            Keys.forwardTo: [root.modal.modalFocusScope]
++            iconName: ClipboardService._revealedEntries[entry.id] ? "visibility_off" : "visibility"
++            Accessible.name: ClipboardService._revealedEntries[entry.id] ? I18n.tr("Hide secret") : I18n.tr("Reveal secret")
++            iconSize: Theme.iconSizeSmall
++            iconColor: ClipboardService._revealedEntries[entry.id] ? Theme.primary : Theme.error
++            visible: ClipboardService.isEntrySecret(entry) || !!ClipboardService._revealedEntries[entry.id]
++            onClicked: revealRequested()
++        }
+     }
+ 
+     Item {
+@@ -180,17 +192,21 @@ DankListItem {
+ 
+             StyledText {
+                 text: {
++                    const idx = "#" + (root.itemIndex + 1);
++                    const isSec = ClipboardService.isEntrySecret(entry);
++                    const isRev = !!ClipboardService._revealedEntries[entry.id];
++                    if (isSec && !isRev) return idx + " • " + I18n.tr("Secret") + " • " + I18n.tr("Hidden");
+                     switch (entryType) {
+                     case "image":
+-                        return I18n.tr("Image") + " • " + entryPreview;
++                        return idx + " • " + I18n.tr("Image") + " • " + entryPreview;
+                     case "long_text":
+-                        return I18n.tr("Long Text");
++                        return idx + " • " + I18n.tr("Long Text");
+                     default:
+-                        return I18n.tr("Text");
++                        return idx + " • " + I18n.tr("Text");
+                     }
+                 }
+                 font.pixelSize: Theme.fontSizeSmall
+-                color: root.colorForRole(Theme.primary)
++                color: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? Theme.error : root.colorForRole(Theme.primary)
+                 font.weight: Theme.fontWeightMedium
+                 width: parent.width
+                 elide: Text.ElideRight
+@@ -199,7 +215,8 @@ DankListItem {
+             StyledText {
+                 text: entryPreview
+                 font.pixelSize: Theme.fontSizeMedium
+-                color: root.contentColor
++                font.family: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? "monospace" : Theme.fontFamily
++                color: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? Theme.error : root.contentColor
+                 width: parent.width
+                 wrapMode: Text.WordWrap
+                 maximumLineCount: entryType === "long_text" ? 3 : 1
+diff --git a/quickshell/Modals/Clipboard/ClipboardHeader.qml b/quickshell/Modals/Clipboard/ClipboardHeader.qml
+index c053a7a2..35e68a8a 100644
+--- a/quickshell/Modals/Clipboard/ClipboardHeader.qml
++++ b/quickshell/Modals/Clipboard/ClipboardHeader.qml
+@@ -11,7 +11,7 @@ DankWindowHeader {
+     horizontalPadding: 0
+     verticalPadding: 0
+     showDivider: false
+-    title: (modal.activeTab === "saved" ? I18n.tr("Clipboard Saved") : I18n.tr("Clipboard History")) + ` (${modal.activeTab === "saved" ? modal.pinnedEntries.length : modal.unpinnedEntries.length})`
++    title: I18n.tr("Clipboard") + ` (${modal.totalCount})`
+     onCloseRequested: modal.hide()
+ 
+     ClipboardActions {
+diff --git a/quickshell/Modals/Clipboard/ClipboardHistoryContent.qml b/quickshell/Modals/Clipboard/ClipboardHistoryContent.qml
+index d616c2e0..8ed9616b 100644
+--- a/quickshell/Modals/Clipboard/ClipboardHistoryContent.qml
++++ b/quickshell/Modals/Clipboard/ClipboardHistoryContent.qml
+@@ -12,7 +12,8 @@ FocusScope {
+     property var transientSurfaceTracker: null
+     property bool popout: false
+ 
+-    property string activeTab: "recents"
++    // Single tab — no saved/recents split
++    readonly property string activeTab: "recents"
+     property bool showKeyboardHints: false
+     property int activeImageLoads: 0
+     readonly property int maxConcurrentLoads: 3
+@@ -37,6 +38,7 @@ FocusScope {
+     property alias searchField: historyContent.searchField
+     property alias editorView: editorView
+     property alias keyboardController: keyboardController
++    property alias moveMode: historyContent.moveMode
+     readonly property alias contextMenuActive: historyContent.contextMenuActive
+ 
+     function closeContextMenu() {
+@@ -46,19 +48,6 @@ FocusScope {
+     signal closeRequested
+     signal instantCloseRequested
+ 
+-    onActiveTabChanged: {
+-        if (activeTab === "saved" && pinnedCount === 0) {
+-            activeTab = "recents";
+-            return;
+-        }
+-        ClipboardService.selectedIndex = 0;
+-        ClipboardService.keyboardNavigationActive = true;
+-    }
+-    onPinnedCountChanged: {
+-        if (activeTab === "saved" && pinnedCount === 0) {
+-            activeTab = "recents";
+-        }
+-    }
+     onSearchTextChanged: ClipboardService.searchText = searchText
+     onCurrentEntryChanged: {
+         if (mode === "preview" && !ClipboardService.canPreviewEntry(currentEntry)) {
+@@ -120,7 +109,7 @@ FocusScope {
+     }
+ 
+     function openPreview(index = selectedIndex) {
+-        const entries = activeTab === "saved" ? pinnedEntries : unpinnedEntries;
++        const entries = clipboardEntries;
+         if (!ClipboardService.canPreviewEntry(entries[index])) {
+             return;
+         }
+@@ -138,7 +127,7 @@ FocusScope {
+     }
+ 
+     function selectedEntry() {
+-        const entries = activeTab === "saved" ? pinnedEntries : unpinnedEntries;
++        const entries = clipboardEntries;
+         if (!entries || entries.length === 0 || selectedIndex < 0 || selectedIndex >= entries.length)
+             return null;
+         return entries[selectedIndex];
+diff --git a/quickshell/Modals/Clipboard/ClipboardKeyboardController.qml b/quickshell/Modals/Clipboard/ClipboardKeyboardController.qml
+index 78574b8c..146d4328 100644
+--- a/quickshell/Modals/Clipboard/ClipboardKeyboardController.qml
++++ b/quickshell/Modals/Clipboard/ClipboardKeyboardController.qml
+@@ -14,7 +14,7 @@ QtObject {
+     }
+ 
+     function selectNext() {
+-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
++        const entries = ClipboardService.clipboardEntries;
+         if (!entries || entries.length === 0) {
+             return;
+         }
+@@ -23,7 +23,7 @@ QtObject {
+     }
+ 
+     function selectPrevious() {
+-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
++        const entries = ClipboardService.clipboardEntries;
+         if (!entries || entries.length === 0) {
+             return;
+         }
+@@ -32,7 +32,7 @@ QtObject {
+     }
+ 
+     function copySelected() {
+-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
++        const entries = ClipboardService.clipboardEntries;
+         if (!entries || entries.length === 0 || ClipboardService.selectedIndex < 0 || ClipboardService.selectedIndex >= entries.length) {
+             return;
+         }
+@@ -41,20 +41,16 @@ QtObject {
+     }
+ 
+     function deleteSelected() {
+-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
++        const entries = ClipboardService.clipboardEntries;
+         if (!entries || entries.length === 0 || ClipboardService.selectedIndex < 0 || ClipboardService.selectedIndex >= entries.length) {
+             return;
+         }
+         const selectedEntry = entries[ClipboardService.selectedIndex];
+-        if (modal.activeTab === "saved") {
+-            modal.deletePinnedEntry(selectedEntry);
+-        } else {
+-            modal.deleteEntry(selectedEntry);
+-        }
++        modal.deleteEntry(selectedEntry);
+     }
+ 
+     function togglePinSelected() {
+-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
++        const entries = ClipboardService.clipboardEntries;
+         if (!entries || entries.length === 0 || ClipboardService.selectedIndex < 0 || ClipboardService.selectedIndex >= entries.length) {
+             return;
+         }
+@@ -72,7 +68,7 @@ QtObject {
+     }
+ 
+     function editSelected() {
+-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
++        const entries = ClipboardService.clipboardEntries;
+         if (!entries || entries.length === 0) {
+             return;
+         }
+@@ -155,12 +151,6 @@ QtObject {
+             return;
+         case Qt.Key_Down:
+         case Qt.Key_Tab:
+-            if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ControlModifier)) {
+-                modal.activeTab = modal.activeTab === "saved" ? "recents" : "saved";
+-                ClipboardService.selectedIndex = 0;
+-                event.accepted = true;
+-                return;
+-            }
+             if (!ClipboardService.keyboardNavigationActive) {
+                 ClipboardService.keyboardNavigationActive = true;
+                 ClipboardService.selectedIndex = 0;
+@@ -171,12 +161,6 @@ QtObject {
+             return;
+         case Qt.Key_Up:
+         case Qt.Key_Backtab:
+-            if (event.key === Qt.Key_Backtab && (event.modifiers & Qt.ControlModifier)) {
+-                modal.activeTab = modal.activeTab === "saved" ? "recents" : "saved";
+-                ClipboardService.selectedIndex = 0;
+-                event.accepted = true;
+-                return;
+-            }
+             if (!ClipboardService.keyboardNavigationActive) {
+                 ClipboardService.keyboardNavigationActive = true;
+                 ClipboardService.selectedIndex = 0;
+@@ -229,12 +213,32 @@ QtObject {
+                 editSelected();
+                 event.accepted = true;
+                 return;
++            case Qt.Key_G:
++                if (ClipboardService.keyboardNavigationActive) {
++                    modal.moveMode = true;
++                    event.accepted = true;
++                }
++                return;
+             case Qt.Key_Space:
+                 if (ClipboardService.keyboardNavigationActive) {
+                     modal.openPreview();
+                     event.accepted = true;
+                 }
+                 return;
++            case Qt.Key_Up:
++                if (ClipboardService.keyboardNavigationActive) {
++                    ClipboardService.moveEntry(ClipboardService.selectedIndex, ClipboardService.selectedIndex - 1);
++                    ClipboardService.selectedIndex = Math.max(0, ClipboardService.selectedIndex - 1);
++                    event.accepted = true;
++                }
++                return;
++            case Qt.Key_Down:
++                if (ClipboardService.keyboardNavigationActive) {
++                    ClipboardService.moveEntry(ClipboardService.selectedIndex, ClipboardService.selectedIndex + 1);
++                    ClipboardService.selectedIndex = Math.min(ClipboardService.clipboardEntries.length - 1, ClipboardService.selectedIndex + 1);
++                    event.accepted = true;
++                }
++                return;
+             }
+         }
+ 
+@@ -255,6 +259,20 @@ QtObject {
+                     event.accepted = true;
+                 }
+                 return;
++            case Qt.Key_Up:
++                if (ClipboardService.keyboardNavigationActive && (event.modifiers & Qt.ControlModifier)) {
++                    ClipboardService.moveEntry(ClipboardService.selectedIndex, 0);
++                    ClipboardService.selectedIndex = 0;
++                    event.accepted = true;
++                }
++                return;
++            case Qt.Key_Down:
++                if (ClipboardService.keyboardNavigationActive && (event.modifiers & Qt.ControlModifier)) {
++                    ClipboardService.moveEntry(ClipboardService.selectedIndex, ClipboardService.clipboardEntries.length - 1);
++                    ClipboardService.selectedIndex = ClipboardService.clipboardEntries.length - 1;
++                    event.accepted = true;
++                }
++                return;
+             }
+         }
+ 
+diff --git a/quickshell/Services/ClipboardService.qml b/quickshell/Services/ClipboardService.qml
+index 3deb1001..8f7e52b8 100644
+--- a/quickshell/Services/ClipboardService.qml
++++ b/quickshell/Services/ClipboardService.qml
+@@ -41,6 +41,110 @@ Singleton {
+     signal historyCleared
+     signal launcherSearchReady(string query)
+ 
++    // ── Secret masking ────────────────────────────────────────────────
++    property var _revealedEntries: ({})
++
++    readonly property var _secretPatterns: [
++        /sk-[A-Za-z0-9\-]{20,}/g,
++        /hf_[A-Za-z0-9]{36}/g,
++        /ghp_[A-Za-z0-9]{36}/g,
++        /AKIA[0-9A-Z]{16}/g,
++        /password\s*[:=]\s*\S+/gi,
++        /secret\s*[:=]\s*\S+/gi,
++        /token\s*[:=]\s*\S+/gi,
++        /api[_\-]?key\s*[:=]\s*\S+/gi,
++        /[A-Za-z0-9_\-]{40,}/g,
++        /_Fedora_shahiidi2213/,
++        /_Server_shahiidi2213/,
++        /_Zen_shahiidi2213/,
++        /Pb8VMHU9d/,
++    ]
++
++    function _isSecret(text) {
++        if (!text || text.length === 0) return false;
++        for (let i = 0; i < _secretPatterns.length; i++) {
++            _secretPatterns[i].lastIndex = 0;
++            if (_secretPatterns[i].test(text)) return true;
++        }
++        return false;
++    }
++
++    function _maskSecrets(text) {
++        if (!text) return text;
++        let masked = text;
++        for (let i = 0; i < _secretPatterns.length; i++) {
++            _secretPatterns[i].lastIndex = 0;
++            masked = masked.replace(_secretPatterns[i], function(match) {
++                return Array(Math.min(match.length, 60) + 1).join('\u2588');
++            });
++        }
++        return masked;
++    }
++
++    function toggleRevealEntry(entry) {
++        if (!entry) return;
++        const id = entry.id;
++        const newSet = Object.assign({}, _revealedEntries);
++        if (newSet[id]) {
++            delete newSet[id];
++        } else {
++            newSet[id] = true;
++        }
++        _revealedEntries = newSet;
++    }
++
++    function isEntrySecret(entry) {
++        if (_revealedEntries[entry.id]) return false;
++        return _isSecret(entry.preview || "");
++    }
++
++    // ── Custom sort order ────────────────────────────────────────────
++    // Maps entry.id -> sort position. Pinned items keep their position
++    // even when new items are copied. New unpinned items go at the end.
++    property var _orderMap: ({})
++
++    function _sortKey(entry) {
++        if (_orderMap[entry.id] !== undefined) return _orderMap[entry.id];
++        // Unpinned items without explicit order: position after all ordered items
++        let maxOrdered = 0;
++        for (const k in _orderMap) { if (_orderMap[k] > maxOrdered) maxOrdered = _orderMap[k]; }
++        // Use a large offset + id so new items always sort after pinned ones
++        return -entry.id;
++    }
++
++    function _assignOrder(entry, position) {
++        const m = Object.assign({}, _orderMap);
++        m[entry.id] = position;
++        _orderMap = m;
++    }
++
++    function moveEntry(fromIdx, toIdx) {
++        if (fromIdx < 0 || fromIdx >= clipboardEntries.length) return;
++        if (toIdx < 0 || toIdx >= clipboardEntries.length) return;
++        if (fromIdx === toIdx) return;
++
++        const entry = clipboardEntries[fromIdx];
++        const m = Object.assign({}, _orderMap);
++
++        // Collect all current sort keys in display order
++        const entries = clipboardEntries.slice();
++        const moved = entries.splice(fromIdx, 1)[0];
++        entries.splice(toIdx, 0, moved);
++
++        // Renumber all positions sequentially
++        for (let i = 0; i < entries.length; i++) {
++            m[entries[i].id] = i + 1;
++        }
++        _orderMap = m;
++        updateFilteredModel();
++    }
++
++    function moveToPosition(fromIdx, targetPos) {
++        // targetPos is 1-indexed (user types "80" meaning 80th position)
++        const toIdx = Math.max(0, Math.min(targetPos - 1, clipboardEntries.length - 1));
++        moveEntry(fromIdx, toIdx);
++    }
++
+     Timer {
+         id: pasteTimer
+         interval: 200
+@@ -98,28 +202,37 @@ Singleton {
+     function updateFilteredModel() {
+         const query = searchText.trim().toLowerCase();
+         const filterAll = activeFilter === "all";
+-        const unpinned = [];
+-        const pinned = [];
++        const numQuery = parseInt(query);
++        const isNumSearch = !isNaN(numQuery) && query === numQuery.toString() && numQuery > 0;
+ 
++        // Step 1: filter by type only, sort
++        let pool = [];
+         for (let i = 0; i < internalEntries.length; i++) {
+             const entry = internalEntries[i];
+-            if (!filterAll && getEntryType(entry) !== activeFilter)
+-                continue;
+-            if (query.length > 0 && !entry.preview.toLowerCase().includes(query))
+-                continue;
+-            (entry.pinned ? pinned : unpinned).push(entry);
++            if (!filterAll && getEntryType(entry) !== activeFilter) continue;
++            pool.push(entry);
++        }
++        pool.sort((a, b) => _sortKey(a) - _sortKey(b));
++
++        // Step 2: filter by query — text match OR displayed position number
++        const filtered = [];
++        for (let i = 0; i < pool.length; i++) {
++            const entry = pool[i];
++            if (query.length > 0) {
++                const matchesText = entry.preview.toLowerCase().includes(query);
++                const matchesNum = isNumSearch && (i + 1) === numQuery;
++                if (!matchesText && !matchesNum) continue;
++            }
++            filtered.push(entry);
+         }
+ 
+-        const byIdDesc = (a, b) => b.id - a.id;
+-        pinned.sort(byIdDesc);
+-        unpinned.sort(byIdDesc);
+-
+-        pinnedEntries = pinned;
+-        unpinnedEntries = unpinned;
+-        clipboardEntries = pinned.concat(unpinned);
++        clipboardEntries = filtered;
++        pinnedEntries = filtered.filter(e => e.pinned);
++        unpinnedEntries = filtered.filter(e => !e.pinned);
++        pinnedCount = pinnedEntries.length;
+         totalCount = clipboardEntries.length;
+ 
+-        const activeCount = Math.max(unpinned.length, pinned.length);
++        const activeCount = clipboardEntries.length;
+ 
+         if (activeCount === 0) {
+             keyboardNavigationActive = false;
+@@ -320,6 +433,9 @@ Singleton {
+                 return;
+             }
+ 
++            // Freeze the entry's current sort position
++            _assignOrder(entry, _sortKey(entry));
++
+             DMSService.sendRequest("clipboard.pinEntry", {
+                 "id": entry.id
+             }, function (response) {
+@@ -407,7 +523,9 @@ Singleton {
+     }
+ 
+     function getEntryPreview(entry) {
+-        return entry.preview || "";
++        const preview = entry.preview || "";
++        if (_revealedEntries[entry.id]) return preview;
++        return _isSecret(preview) ? _maskSecrets(preview) : preview;
+     }
+ 
+     function isTextMimeType(mimeType) {

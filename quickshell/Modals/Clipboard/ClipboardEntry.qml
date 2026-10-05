@@ -17,6 +17,7 @@ DankListItem {
     signal unpinRequested(var targetEntry)
     signal editRequested
     signal previewRequested
+    signal revealRequested
 
     readonly property string entryType: modal ? modal.getEntryType(entry) : "text"
     readonly property string entryPreview: modal ? modal.getEntryPreview(entry) : ""
@@ -31,7 +32,7 @@ DankListItem {
     readonly property bool showDeleteAction: visibleEntryActions.includes("delete")
     readonly property bool showPreviewAction: ClipboardService.canPreviewEntry(entry)
     readonly property bool showPinnedIndicator: effectivePinned && !showPinAction
-    readonly property bool showAnyAction: showCopyAction || showPasteAction || showPinAction || showEditAction || showDeleteAction || showPinnedIndicator || showPreviewAction
+    readonly property bool showAnyAction: showCopyAction || showPasteAction || showPinAction || showEditAction || showDeleteAction || showPinnedIndicator || showPreviewAction || ClipboardService.isEntrySecret(entry) || !!ClipboardService._revealedEntries[entry.id]
 
     keyForwardTargets: [modal.modalFocusScope]
     firstInGroup: itemIndex === 0
@@ -145,6 +146,17 @@ DankListItem {
             visible: root.showDeleteAction
             onClicked: deleteRequested()
         }
+
+        // Secret reveal toggle
+        DankActionButton {
+            Keys.forwardTo: [root.modal.modalFocusScope]
+            iconName: ClipboardService._revealedEntries[entry.id] ? "visibility_off" : "visibility"
+            Accessible.name: ClipboardService._revealedEntries[entry.id] ? I18n.tr("Hide secret") : I18n.tr("Reveal secret")
+            iconSize: Theme.iconSizeSmall
+            iconColor: ClipboardService._revealedEntries[entry.id] ? Theme.primary : Theme.error
+            visible: ClipboardService.isEntrySecret(entry) || !!ClipboardService._revealedEntries[entry.id]
+            onClicked: revealRequested()
+        }
     }
 
     Item {
@@ -180,17 +192,21 @@ DankListItem {
 
             StyledText {
                 text: {
+                    const idx = "#" + (root.itemIndex + 1);
+                    const isSec = ClipboardService.isEntrySecret(entry);
+                    const isRev = !!ClipboardService._revealedEntries[entry.id];
+                    if (isSec && !isRev) return idx + " • " + I18n.tr("Secret") + " • " + I18n.tr("Hidden");
                     switch (entryType) {
                     case "image":
-                        return I18n.tr("Image") + " • " + entryPreview;
+                        return idx + " • " + I18n.tr("Image") + " • " + entryPreview;
                     case "long_text":
-                        return I18n.tr("Long Text");
+                        return idx + " • " + I18n.tr("Long Text");
                     default:
-                        return I18n.tr("Text");
+                        return idx + " • " + I18n.tr("Text");
                     }
                 }
                 font.pixelSize: Theme.fontSizeSmall
-                color: root.colorForRole(Theme.primary)
+                color: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? Theme.error : root.colorForRole(Theme.primary)
                 font.weight: Theme.fontWeightMedium
                 width: parent.width
                 elide: Text.ElideRight
@@ -199,7 +215,8 @@ DankListItem {
             StyledText {
                 text: entryPreview
                 font.pixelSize: Theme.fontSizeMedium
-                color: root.contentColor
+                font.family: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? "monospace" : Theme.fontFamily
+                color: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? Theme.error : root.contentColor
                 width: parent.width
                 wrapMode: Text.WordWrap
                 maximumLineCount: entryType === "long_text" ? 3 : 1

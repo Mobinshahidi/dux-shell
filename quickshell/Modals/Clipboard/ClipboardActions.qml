@@ -11,18 +11,6 @@ Row {
 
     DankActionButton {
         Keys.forwardTo: [actions.modal.modalFocusScope]
-        iconName: "push_pin"
-        buttonSize: Theme.buttonHeightXXS
-        iconSize: Theme.iconSizeSmall
-        iconColor: actions.modal.activeTab === "saved" ? Theme.onPrimary : Theme.onSurfaceVariant
-        backgroundColor: actions.modal.activeTab === "saved" ? Theme.primary : "transparent"
-        visible: actions.modal.pinnedCount > 0 || actions.modal.activeTab === "saved"
-        tooltipText: actions.modal.activeTab === "saved" ? I18n.tr("Recent", "clipboard button tooltip, switches to recent entries") : I18n.tr("Saved", "clipboard button tooltip, switches to saved entries")
-        onClicked: actions.modal.activeTab = actions.modal.activeTab === "saved" ? "recents" : "saved"
-    }
-
-    DankActionButton {
-        Keys.forwardTo: [actions.modal.modalFocusScope]
         objectName: "keyboardHints"
         iconName: "info"
         buttonSize: Theme.buttonHeightXXS

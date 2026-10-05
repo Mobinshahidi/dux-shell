@@ -41,10 +41,11 @@ Item {
     property bool osdSurfacesLoaded: false
     property int pendingOsdResumeReloads: 0
     readonly property var notificationPopupScreens: {
-        const screens = SettingsData.notificationFocusedMonitor ? Quickshell.screens : SettingsData.getFilteredScreens("notifications");
-        if (!SettingsData.dankIslandEnabled)
-            return screens;
-        return screens.filter(screen => !SettingsData.dankIslandHandlesNotifications(screen));
+        // Popup-routing patch: NotificationPopupManager gates per-notification
+        // via NotificationService.isPopupRouted, so popup managers must exist
+        // on every screen — including island-handled ones — otherwise
+        // rule-matched popups never render.
+        return SettingsData.notificationFocusedMonitor ? Quickshell.screens : SettingsData.getFilteredScreens("notifications");
     }
     readonly property var legacySystemLevelOsdScreens: {
         const screens = SettingsData.getFilteredScreens("osd");

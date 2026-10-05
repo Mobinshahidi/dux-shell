@@ -1,0 +1,34 @@
+diff --git a/quickshell/Modules/Notifications/Popup/NotificationPopup.qml b/quickshell/Modules/Notifications/Popup/NotificationPopup.qml
+index e56ec495..556aac31 100644
+--- a/quickshell/Modules/Notifications/Popup/NotificationPopup.qml
++++ b/quickshell/Modules/Notifications/Popup/NotificationPopup.qml
+@@ -169,6 +169,11 @@ PanelWindow {
+         win.exitFinished();
+     }
+ 
++    function summaryMatchesBatteryRule() {
++        const s = (win.notificationData && win.notificationData.summary) || "";
++        return s.toLowerCase().indexOf("battery") !== -1;
++    }
++
+     function closeTransientUi() {
+         transientSurfaces.closeAll();
+         popupContextMenuLoader.active = false;
+@@ -296,6 +301,8 @@ PanelWindow {
+         _inlineGeometryReady = true;
+         if (SettingsData.notificationPopupPrivacyMode)
+             descriptionExpanded = false;
++        if (summaryMatchesBatteryRule())
++            descriptionExpanded = true;
+         if (!hasValidData)
+             forceExit();
+     }
+@@ -304,6 +311,8 @@ PanelWindow {
+             closeTransientUi();
+             if (SettingsData.notificationPopupPrivacyMode)
+                 descriptionExpanded = false;
++            if (summaryMatchesBatteryRule())
++                descriptionExpanded = true;
+             wrapperConn.target = win.notificationData || null;
+             notificationConn.target = (win.notificationData && win.notificationData.notification && win.notificationData.notification.Retainable) || null;
+         }

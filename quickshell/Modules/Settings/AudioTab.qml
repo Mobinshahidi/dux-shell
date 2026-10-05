@@ -194,7 +194,7 @@ Item {
                             anchors.rightMargin: Theme.spacingM
                             anchors.verticalCenter: parent.verticalCenter
                             minimum: 100
-                            maximum: 200
+                            maximum: 250
                             step: 5
                             showValue: true
                             wheelEnabled: false

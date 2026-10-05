@@ -14,7 +14,7 @@ QtObject {
     }
 
     function selectNext() {
-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
+        const entries = ClipboardService.clipboardEntries;
         if (!entries || entries.length === 0) {
             return;
         }
@@ -23,7 +23,7 @@ QtObject {
     }
 
     function selectPrevious() {
-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
+        const entries = ClipboardService.clipboardEntries;
         if (!entries || entries.length === 0) {
             return;
         }
@@ -32,7 +32,7 @@ QtObject {
     }
 
     function copySelected() {
-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
+        const entries = ClipboardService.clipboardEntries;
         if (!entries || entries.length === 0 || ClipboardService.selectedIndex < 0 || ClipboardService.selectedIndex >= entries.length) {
             return;
         }
@@ -41,20 +41,16 @@ QtObject {
     }
 
     function deleteSelected() {
-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
+        const entries = ClipboardService.clipboardEntries;
         if (!entries || entries.length === 0 || ClipboardService.selectedIndex < 0 || ClipboardService.selectedIndex >= entries.length) {
             return;
         }
         const selectedEntry = entries[ClipboardService.selectedIndex];
-        if (modal.activeTab === "saved") {
-            modal.deletePinnedEntry(selectedEntry);
-        } else {
-            modal.deleteEntry(selectedEntry);
-        }
+        modal.deleteEntry(selectedEntry);
     }
 
     function togglePinSelected() {
-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
+        const entries = ClipboardService.clipboardEntries;
         if (!entries || entries.length === 0 || ClipboardService.selectedIndex < 0 || ClipboardService.selectedIndex >= entries.length) {
             return;
         }
@@ -72,7 +68,7 @@ QtObject {
     }
 
     function editSelected() {
-        const entries = modal.activeTab === "saved" ? ClipboardService.pinnedEntries : ClipboardService.unpinnedEntries;
+        const entries = ClipboardService.clipboardEntries;
         if (!entries || entries.length === 0) {
             return;
         }
@@ -155,12 +151,6 @@ QtObject {
             return;
         case Qt.Key_Down:
         case Qt.Key_Tab:
-            if (event.key === Qt.Key_Tab && (event.modifiers & Qt.ControlModifier)) {
-                modal.activeTab = modal.activeTab === "saved" ? "recents" : "saved";
-                ClipboardService.selectedIndex = 0;
-                event.accepted = true;
-                return;
-            }
             if (!ClipboardService.keyboardNavigationActive) {
                 ClipboardService.keyboardNavigationActive = true;
                 ClipboardService.selectedIndex = 0;
@@ -171,12 +161,6 @@ QtObject {
             return;
         case Qt.Key_Up:
         case Qt.Key_Backtab:
-            if (event.key === Qt.Key_Backtab && (event.modifiers & Qt.ControlModifier)) {
-                modal.activeTab = modal.activeTab === "saved" ? "recents" : "saved";
-                ClipboardService.selectedIndex = 0;
-                event.accepted = true;
-                return;
-            }
             if (!ClipboardService.keyboardNavigationActive) {
                 ClipboardService.keyboardNavigationActive = true;
                 ClipboardService.selectedIndex = 0;
@@ -229,9 +213,29 @@ QtObject {
                 editSelected();
                 event.accepted = true;
                 return;
+            case Qt.Key_G:
+                if (ClipboardService.keyboardNavigationActive) {
+                    modal.moveMode = true;
+                    event.accepted = true;
+                }
+                return;
             case Qt.Key_Space:
                 if (ClipboardService.keyboardNavigationActive) {
                     modal.openPreview();
+                    event.accepted = true;
+                }
+                return;
+            case Qt.Key_Up:
+                if (ClipboardService.keyboardNavigationActive) {
+                    ClipboardService.moveEntry(ClipboardService.selectedIndex, ClipboardService.selectedIndex - 1);
+                    ClipboardService.selectedIndex = Math.max(0, ClipboardService.selectedIndex - 1);
+                    event.accepted = true;
+                }
+                return;
+            case Qt.Key_Down:
+                if (ClipboardService.keyboardNavigationActive) {
+                    ClipboardService.moveEntry(ClipboardService.selectedIndex, ClipboardService.selectedIndex + 1);
+                    ClipboardService.selectedIndex = Math.min(ClipboardService.clipboardEntries.length - 1, ClipboardService.selectedIndex + 1);
                     event.accepted = true;
                 }
                 return;
@@ -252,6 +256,20 @@ QtObject {
                     } else {
                         modal.pasteSelected();
                     }
+                    event.accepted = true;
+                }
+                return;
+            case Qt.Key_Up:
+                if (ClipboardService.keyboardNavigationActive && (event.modifiers & Qt.ControlModifier)) {
+                    ClipboardService.moveEntry(ClipboardService.selectedIndex, 0);
+                    ClipboardService.selectedIndex = 0;
+                    event.accepted = true;
+                }
+                return;
+            case Qt.Key_Down:
+                if (ClipboardService.keyboardNavigationActive && (event.modifiers & Qt.ControlModifier)) {
+                    ClipboardService.moveEntry(ClipboardService.selectedIndex, ClipboardService.clipboardEntries.length - 1);
+                    ClipboardService.selectedIndex = ClipboardService.clipboardEntries.length - 1;
                     event.accepted = true;
                 }
                 return;

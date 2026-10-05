@@ -11,7 +11,7 @@ DankWindowHeader {
     horizontalPadding: 0
     verticalPadding: 0
     showDivider: false
-    title: (modal.activeTab === "saved" ? I18n.tr("Clipboard Saved") : I18n.tr("Clipboard History")) + ` (${modal.activeTab === "saved" ? modal.pinnedEntries.length : modal.unpinnedEntries.length})`
+    title: I18n.tr("Clipboard") + ` (${modal.totalCount})`
     onCloseRequested: modal.hide()
 
     ClipboardActions {
