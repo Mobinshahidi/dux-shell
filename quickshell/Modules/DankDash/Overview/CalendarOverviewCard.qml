@@ -7,6 +7,7 @@ import qs.Services
 import qs.Widgets
 import qs.Modules.DankDash
 import "../../../Common/DateOnly.js" as DateOnly
+import "Jalali.js" as Jalali
 
 Card {
     id: root
@@ -17,6 +18,14 @@ Card {
     property var selectedDateEvents: []
     readonly property bool hasEvents: selectedDateEvents && selectedDateEvents.length > 0
     readonly property bool canCreate: CalendarService.canCreateEvents
+
+    // "gregorian" | "jalali" | "dual" — from the card's dash options.
+    readonly property string persianMode: {
+        const v = root.options ? root.options.persian : "gregorian";
+        return (v === "jalali" || v === "dual") ? v : "gregorian";
+    }
+    readonly property bool persianActive: persianMode !== "gregorian"
+    readonly property bool persianDual: persianMode === "dual"
 
     property int eventsRevision: 0
 
@@ -271,6 +280,35 @@ Card {
                 color: Theme.surfaceText
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
+                visible: !root.persianActive
+            }
+
+            Column {
+                anchors.centerIn: parent
+                width: parent.width - DashMetrics.monthNavSize * 4
+                visible: root.persianActive
+                spacing: 0
+
+                StyledText {
+                    width: parent.width
+                    text: Jalali.formatMonthYear(calendarGrid.displayDate)
+                    font.family: "Vazirmatn"
+                    font.pixelSize: Theme.fontSizeLarge
+                    font.weight: Theme.fontWeightMedium
+                    color: Theme.surfaceText
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                }
+
+                StyledText {
+                    width: parent.width
+                    text: calendarGrid.displayDate.toLocaleDateString(I18n.locale(), "MMMM yyyy")
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.onSurfaceVariant
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    visible: root.persianDual
+                }
             }
 
             Row {
@@ -313,13 +351,16 @@ Card {
                 anchors.centerIn: parent
                 width: parent.width - DashMetrics.monthNavSize * 2 - Theme.spacingS * 2
                 text: {
-                    const dateStr = Qt.formatDate(root.selectedDate, "MMM d");
+                    let dateStr = Qt.formatDate(root.selectedDate, "MMM d");
+                    if (root.persianActive)
+                        dateStr = Jalali.formatDayMonth(root.selectedDate) + (root.persianDual ? " • " + dateStr : "");
                     if (!root.hasEvents)
                         return dateStr;
                     const count = root.selectedDateEvents.length;
                     const eventCount = count === 1 ? I18n.tr("1 task", "task count next to a date") : I18n.tr("%1 tasks", "task count next to a date, %1 is the number of tasks").arg(count);
                     return dateStr + " • " + eventCount;
                 }
+                font.family: root.persianActive ? "Vazirmatn" : Qt.application.font.family
                 font.pixelSize: Theme.fontSizeMedium
                 font.weight: Theme.fontWeightMedium
                 color: Theme.surfaceText
@@ -356,12 +397,17 @@ Card {
             today: systemClock.date
             firstDayOfWeek: root.weekStartJs()
             dayNames: {
+                if (root.persianActive)
+                    return Jalali.dayNamesFrom(root.weekStartJs());
                 const days = [];
                 const qtFirst = root.weekStartQt();
                 for (let i = 0; i < 7; ++i)
                     days.push(I18n.locale().dayName(((qtFirst - 1 + i) % 7) + 1, Locale.ShortFormat));
                 return days;
             }
+            dayLabelFor: root.persianActive ? (date => Jalali.toPersianDigits(Jalali.fromDate(date).jd)) : null
+            secondaryDayLabelFor: root.persianDual ? (date => String(date.getDate())) : null
+            dayLabelFontFamily: root.persianActive ? "Vazirmatn" : ""
             showWeekNumbers: SettingsData.showWeekNumber
             highlightWeekends: root.options.weekends === true
             weekColumnWidth: DashMetrics.weekColumnWidth

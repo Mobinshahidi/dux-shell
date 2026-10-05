@@ -223,7 +223,20 @@ Singleton {
                 "minH": 3,
                 "async": true
             },
-            "options": [toggle("weekends", I18n.tr("Highlight weekends"), false)]
+            "options": [toggle("weekends", I18n.tr("Highlight weekends"), false), choice("persian", I18n.tr("Persian dates", "calendar card date-system option"), "dual", [
+                    {
+                        "value": "gregorian",
+                        "text": I18n.tr("Gregorian", "date system option")
+                    },
+                    {
+                        "value": "jalali",
+                        "text": I18n.tr("Jalali", "date system option")
+                    },
+                    {
+                        "value": "dual",
+                        "text": I18n.tr("Dual", "date system option")
+                    }
+                ])]
         },
         {
             "id": "user",
