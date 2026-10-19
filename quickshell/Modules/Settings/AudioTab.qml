@@ -219,7 +219,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     height: 36
                                     minimum: 100
-                                    maximum: 200
+                                    maximum: 250
                                     step: 5
                                     showValue: true
                                     wheelEnabled: false

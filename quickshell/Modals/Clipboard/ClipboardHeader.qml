@@ -8,6 +8,7 @@ Item {
 
     property int recentsCount: 0
     property int savedCount: 0
+    property int totalCount: 0
     property bool showKeyboardHints: false
     property string activeTab: "recents"
     property int pinnedCount: 0
@@ -33,7 +34,8 @@ Item {
         }
 
         StyledText {
-            text: (header.activeTab === "saved" ? I18n.tr("Clipboard Saved") : I18n.tr("Clipboard History")) + ` (${header.activeTab === "saved" ? header.savedCount : header.recentsCount})`
+            // Single unified list — one count, no saved/recents split
+            text: I18n.tr("Clipboard") + ` (${header.totalCount})`
             font.pixelSize: Theme.fontSizeLarge
             color: Theme.surfaceText
             font.weight: Font.Medium
@@ -45,16 +47,6 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spacingS
-
-        DankActionButton {
-            iconName: "push_pin"
-            iconSize: Theme.iconSize - 4
-            iconColor: header.activeTab === "saved" ? Theme.primary : Theme.surfaceText
-            backgroundColor: header.activeTab === "saved" ? Theme.primarySelected : Theme.withAlpha(Theme.primarySelected, 0)
-            visible: header.pinnedCount > 0 || header.activeTab === "saved"
-            tooltipText: header.activeTab === "saved" ? I18n.tr("Recent") : I18n.tr("Saved")
-            onClicked: tabChanged(header.activeTab === "saved" ? "recents" : "saved")
-        }
 
         DankActionButton {
             iconName: "info"

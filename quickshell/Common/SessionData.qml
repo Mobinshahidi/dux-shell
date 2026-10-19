@@ -1410,7 +1410,7 @@ Singleton {
         if (!nodeName)
             return;
         const updated = Object.assign({}, deviceMaxVolumes);
-        const clamped = Math.max(100, Math.min(200, Math.round(maxPercent)));
+        const clamped = Math.max(100, Math.min(250, Math.round(maxPercent)));
         if (clamped === 100) {
             delete updated[nodeName];
         } else {

@@ -20,6 +20,7 @@ Rectangle {
     signal unpinRequested(var targetEntry)
     signal editRequested
     signal contextMenuRequested(real mouseX, real mouseY)
+    signal revealRequested
 
     readonly property string entryType: modal ? modal.getEntryType(entry) : "text"
     readonly property string entryPreview: modal ? modal.getEntryPreview(entry) : ""
@@ -32,8 +33,8 @@ Rectangle {
     readonly property bool showPinAction: visibleEntryActions.includes("pin")
     readonly property bool showEditAction: visibleEntryActions.includes("edit")
     readonly property bool showDeleteAction: visibleEntryActions.includes("delete")
-    readonly property bool showPinnedIndicator: hasPinnedDuplicate && !showPinAction
-    readonly property bool showAnyAction: showCopyAction || showPasteAction || showPinAction || showEditAction || showDeleteAction || showPinnedIndicator
+    readonly property bool showPinnedIndicator: effectivePinned && !showPinAction
+    readonly property bool showAnyAction: showCopyAction || showPasteAction || showPinAction || showEditAction || showDeleteAction || showPinnedIndicator || ClipboardService.isEntrySecret(entry) || !!ClipboardService._revealedEntries[entry.id]
 
     radius: Theme.cornerRadius
     color: {
@@ -155,6 +156,17 @@ Rectangle {
             visible: root.showDeleteAction
             onClicked: deleteRequested()
         }
+
+        // Secret reveal toggle
+        DankActionButton {
+            Keys.forwardTo: [root.modal.modalFocusScope]
+            iconName: ClipboardService._revealedEntries[entry.id] ? "visibility_off" : "visibility"
+            Accessible.name: ClipboardService._revealedEntries[entry.id] ? I18n.tr("Hide secret") : I18n.tr("Reveal secret")
+            iconSize: Theme.iconSizeSmall
+            iconColor: ClipboardService._revealedEntries[entry.id] ? Theme.primary : Theme.error
+            visible: ClipboardService.isEntrySecret(entry) || !!ClipboardService._revealedEntries[entry.id]
+            onClicked: revealRequested()
+        }
     }
 
     Item {
@@ -190,6 +202,8 @@ Rectangle {
 
             StyledText {
                 text: {
+                    if (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id])
+                        return I18n.tr("Secret") + " • " + I18n.tr("Hidden");
                     switch (entryType) {
                     case "image":
                         return I18n.tr("Image") + " • " + entryPreview;
@@ -200,7 +214,7 @@ Rectangle {
                     }
                 }
                 font.pixelSize: Theme.fontSizeSmall
-                color: Theme.primary
+                color: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? Theme.error : Theme.primary
                 font.weight: Font.Medium
                 width: parent.width
                 elide: Text.ElideRight
@@ -209,7 +223,8 @@ Rectangle {
             StyledText {
                 text: entryPreview
                 font.pixelSize: Theme.fontSizeMedium
-                color: Theme.surfaceText
+                font.family: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? "monospace" : Theme.fontFamily
+                color: (ClipboardService.isEntrySecret(entry) && !ClipboardService._revealedEntries[entry.id]) ? Theme.error : Theme.surfaceText
                 width: parent.width
                 wrapMode: Text.WordWrap
                 maximumLineCount: entryType === "long_text" ? 3 : 1

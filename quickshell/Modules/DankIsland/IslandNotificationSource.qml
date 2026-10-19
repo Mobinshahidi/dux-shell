@@ -74,6 +74,11 @@ QtObject {
         if (!wrapper || !NotificationService.isFocusedScreen(root.targetScreen))
             return false;
 
+        // Rule-matched notifications render as overlay popups instead —
+        // never adopt them on the island face (no double display).
+        if (NotificationService.isPopupRouted(wrapper))
+            return false;
+
         const isCritical = wrapper.urgency === NotificationUrgency.Critical;
         if (!controller.canRequestNotification(isCritical))
             return false;

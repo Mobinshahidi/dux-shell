@@ -40,6 +40,110 @@ Singleton {
     signal historyCleared
     signal launcherSearchReady(string query)
 
+    // ── Secret masking ────────────────────────────────────────────────
+    property var _revealedEntries: ({})
+
+    readonly property var _secretPatterns: [
+        /sk-[A-Za-z0-9\-]{20,}/g,
+        /hf_[A-Za-z0-9]{36}/g,
+        /ghp_[A-Za-z0-9]{36}/g,
+        /AKIA[0-9A-Z]{16}/g,
+        /password\s*[:=]\s*\S+/gi,
+        /secret\s*[:=]\s*\S+/gi,
+        /token\s*[:=]\s*\S+/gi,
+        /api[_\-]?key\s*[:=]\s*\S+/gi,
+        /[A-Za-z0-9_\-]{40,}/g,
+        /_Fedora_shahiidi2213/,
+        /_Server_shahiidi2213/,
+        /_Zen_shahiidi2213/,
+        /Pb8VMHU9d/,
+    ]
+
+    function _isSecret(text) {
+        if (!text || text.length === 0) return false;
+        for (let i = 0; i < _secretPatterns.length; i++) {
+            _secretPatterns[i].lastIndex = 0;
+            if (_secretPatterns[i].test(text)) return true;
+        }
+        return false;
+    }
+
+    function _maskSecrets(text) {
+        if (!text) return text;
+        let masked = text;
+        for (let i = 0; i < _secretPatterns.length; i++) {
+            _secretPatterns[i].lastIndex = 0;
+            masked = masked.replace(_secretPatterns[i], function(match) {
+                return Array(Math.min(match.length, 60) + 1).join('\u2588');
+            });
+        }
+        return masked;
+    }
+
+    function toggleRevealEntry(entry) {
+        if (!entry) return;
+        const id = entry.id;
+        const newSet = Object.assign({}, _revealedEntries);
+        if (newSet[id]) {
+            delete newSet[id];
+        } else {
+            newSet[id] = true;
+        }
+        _revealedEntries = newSet;
+    }
+
+    function isEntrySecret(entry) {
+        if (_revealedEntries[entry.id]) return false;
+        return _isSecret(entry.preview || "");
+    }
+
+    // ── Custom sort order ────────────────────────────────────────────
+    // Maps entry.id -> sort position. Pinned items keep their position
+    // even when new items are copied. New unpinned items go at the end.
+    property var _orderMap: ({})
+
+    function _sortKey(entry) {
+        if (_orderMap[entry.id] !== undefined) return _orderMap[entry.id];
+        // Unpinned items without explicit order: position after all ordered items
+        let maxOrdered = 0;
+        for (const k in _orderMap) { if (_orderMap[k] > maxOrdered) maxOrdered = _orderMap[k]; }
+        // Use a large offset + id so new items always sort after pinned ones
+        return -entry.id;
+    }
+
+    function _assignOrder(entry, position) {
+        const m = Object.assign({}, _orderMap);
+        m[entry.id] = position;
+        _orderMap = m;
+    }
+
+    function moveEntry(fromIdx, toIdx) {
+        if (fromIdx < 0 || fromIdx >= clipboardEntries.length) return;
+        if (toIdx < 0 || toIdx >= clipboardEntries.length) return;
+        if (fromIdx === toIdx) return;
+
+        const entry = clipboardEntries[fromIdx];
+        const m = Object.assign({}, _orderMap);
+
+        // Collect all current sort keys in display order
+        const entries = clipboardEntries.slice();
+        const moved = entries.splice(fromIdx, 1)[0];
+        entries.splice(toIdx, 0, moved);
+
+        // Renumber all positions sequentially
+        for (let i = 0; i < entries.length; i++) {
+            m[entries[i].id] = i + 1;
+        }
+        _orderMap = m;
+        updateFilteredModel();
+    }
+
+    function moveToPosition(fromIdx, targetPos) {
+        // targetPos is 1-indexed (user types "80" meaning 80th position)
+        const toIdx = Math.max(0, Math.min(targetPos - 1, clipboardEntries.length - 1));
+        moveEntry(fromIdx, toIdx);
+    }
+
     Timer {
         id: pasteTimer
         interval: 200
@@ -87,28 +191,37 @@ Singleton {
     function updateFilteredModel() {
         const query = searchText.trim().toLowerCase();
         const filterAll = activeFilter === "all";
-        const unpinned = [];
-        const pinned = [];
+        const numQuery = parseInt(query);
+        const isNumSearch = !isNaN(numQuery) && query === numQuery.toString() && numQuery > 0;
 
+        // Step 1: filter by type only, sort
+        let pool = [];
         for (let i = 0; i < internalEntries.length; i++) {
             const entry = internalEntries[i];
-            if (!filterAll && getEntryType(entry) !== activeFilter)
-                continue;
-            if (query.length > 0 && !entry.preview.toLowerCase().includes(query))
-                continue;
-            (entry.pinned ? pinned : unpinned).push(entry);
+            if (!filterAll && getEntryType(entry) !== activeFilter) continue;
+            pool.push(entry);
+        }
+        pool.sort((a, b) => _sortKey(a) - _sortKey(b));
+
+        // Step 2: filter by query — text match OR displayed position number
+        const filtered = [];
+        for (let i = 0; i < pool.length; i++) {
+            const entry = pool[i];
+            if (query.length > 0) {
+                const matchesText = entry.preview.toLowerCase().includes(query);
+                const matchesNum = isNumSearch && (i + 1) === numQuery;
+                if (!matchesText && !matchesNum) continue;
+            }
+            filtered.push(entry);
         }
 
-        const byIdDesc = (a, b) => b.id - a.id;
-        pinned.sort(byIdDesc);
-        unpinned.sort(byIdDesc);
-
-        pinnedEntries = pinned;
-        unpinnedEntries = unpinned;
-        clipboardEntries = pinned.concat(unpinned);
+        clipboardEntries = filtered;
+        pinnedEntries = filtered.filter(e => e.pinned);
+        unpinnedEntries = filtered.filter(e => !e.pinned);
+        pinnedCount = pinnedEntries.length;
         totalCount = clipboardEntries.length;
 
-        const activeCount = Math.max(unpinned.length, pinned.length);
+        const activeCount = clipboardEntries.length;
 
         if (activeCount === 0) {
             keyboardNavigationActive = false;
@@ -309,6 +422,9 @@ Singleton {
                 return;
             }
 
+            // Freeze the entry's current sort position
+            _assignOrder(entry, _sortKey(entry));
+
             DMSService.sendRequest("clipboard.pinEntry", {
                 "id": entry.id
             }, function (response) {
@@ -396,7 +512,9 @@ Singleton {
     }
 
     function getEntryPreview(entry) {
-        return entry.preview || "";
+        const preview = entry.preview || "";
+        if (_revealedEntries[entry.id]) return preview;
+        return _isSecret(preview) ? _maskSecrets(preview) : preview;
     }
 
     function isTextMimeType(mimeType) {

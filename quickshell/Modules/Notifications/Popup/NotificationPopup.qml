@@ -172,6 +172,11 @@ PanelWindow {
         win.exitFinished();
     }
 
+    function popupShouldAutoExpand() {
+        // Follows the notification rules: any rule-matched popup opens expanded.
+        return NotificationService.isPopupRouted(win.notificationData);
+    }
+
     function closeTransientUi() {
         transientSurfaces.closeAll();
         popupContextMenuLoader.active = false;
@@ -309,6 +314,8 @@ PanelWindow {
         _storedBottomMargin = getBottomMargin();
         if (SettingsData.notificationPopupPrivacyMode)
             descriptionExpanded = false;
+        if (popupShouldAutoExpand())
+            descriptionExpanded = true;
         if (hasValidData) {
             Qt.callLater(() => enterX.restart());
         } else {
@@ -320,6 +327,8 @@ PanelWindow {
             closeTransientUi();
             if (SettingsData.notificationPopupPrivacyMode)
                 descriptionExpanded = false;
+            if (popupShouldAutoExpand())
+                descriptionExpanded = true;
             wrapperConn.target = win.notificationData || null;
             notificationConn.target = (win.notificationData && win.notificationData.notification && win.notificationData.notification.Retainable) || null;
         }

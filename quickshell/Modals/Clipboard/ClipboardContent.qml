@@ -42,8 +42,8 @@ Item {
     }
 
     function contextEntryAtLocal(localX, localY) {
-        const listView = modal.activeTab === "saved" ? savedListView : clipboardListView;
-        const entries = modal.activeTab === "saved" ? modal.pinnedEntries : modal.unpinnedEntries;
+        const listView = clipboardListView;
+        const entries = modal.clipboardEntries;
 
         if (!listView.visible || !entries)
             return null;
@@ -90,14 +90,14 @@ Item {
         ClipboardHeader {
             id: header
             width: parent.width
-            recentsCount: modal.unpinnedEntries.length
+            recentsCount: modal.clipboardEntries.length
             savedCount: modal.pinnedEntries.length
+            totalCount: modal.totalCount
             showKeyboardHints: modal.showKeyboardHints
             activeTab: modal.activeTab
             pinnedCount: modal.pinnedCount
             clearsFilteredOnly: modal.clearsFilteredOnly
             onKeyboardHintsToggled: modal.showKeyboardHints = !modal.showKeyboardHints
-            onTabChanged: tabName => modal.activeTab = tabName
             onClearAllClicked: modal.confirmClearAll()
             onCloseClicked: modal.hide()
         }
@@ -126,7 +126,6 @@ Item {
                     ClipboardService.keyboardNavigationActive = true;
                     Qt.callLater(function () {
                         clipboardListView.positionViewAtBeginning();
-                        savedListView.positionViewAtBeginning();
                     });
                 }
 
@@ -203,10 +202,9 @@ Item {
             id: clipboardListView
             anchors.fill: parent
             model: ScriptModel {
-                values: clipboardContent.modal.unpinnedEntries
+                values: clipboardContent.modal.clipboardEntries
                 objectProp: "id"
             }
-            visible: modal.activeTab === "recents"
 
             currentIndex: clipboardContent.modal ? clipboardContent.modal.selectedIndex : 0
             spacing: Theme.spacingXS
@@ -232,11 +230,11 @@ Item {
             }
 
             StyledText {
-                text: clipboardContent.modal.clipboardAvailable ? I18n.tr("No recent clipboard entries found") : I18n.tr("Connecting to clipboard service...")
+                text: clipboardContent.modal.clipboardAvailable ? I18n.tr("No clipboard entries found") : I18n.tr("Connecting to clipboard service...")
                 anchors.centerIn: parent
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceVariantText
-                visible: clipboardContent.modal.unpinnedEntries.length === 0
+                visible: clipboardContent.modal.clipboardEntries.length === 0
             }
 
             delegate: ClipboardEntry {
@@ -257,68 +255,7 @@ Item {
                 onPinRequested: targetEntry => clipboardContent.modal.pinEntry(targetEntry)
                 onUnpinRequested: targetEntry => clipboardContent.modal.unpinEntry(targetEntry)
                 onEditRequested: clipboardContent.modal.editEntry(modelData)
-                onContextMenuRequested: (mouseX, mouseY) => clipboardContent.showContextMenu(modelData, mouseX, mouseY)
-            }
-        }
-
-        DankListView {
-            id: savedListView
-            anchors.fill: parent
-            model: ScriptModel {
-                values: clipboardContent.modal.pinnedEntries
-                objectProp: "id"
-            }
-            visible: modal.activeTab === "saved"
-
-            currentIndex: clipboardContent.modal ? clipboardContent.modal.selectedIndex : 0
-            spacing: Theme.spacingXS
-            interactive: true
-            flickDeceleration: 1500
-            maximumFlickVelocity: 2000
-            boundsBehavior: Flickable.DragAndOvershootBounds
-            boundsMovement: Flickable.FollowBoundsBehavior
-            pressDelay: 0
-            flickableDirection: Flickable.VerticalFlick
-
-            function ensureVisible(index) {
-                if (index < 0 || index >= count) {
-                    return;
-                }
-                positionViewAtIndex(index, ListView.Contain);
-            }
-
-            onCurrentIndexChanged: {
-                if (clipboardContent.modal?.keyboardNavigationActive && currentIndex >= 0) {
-                    ensureVisible(currentIndex);
-                }
-            }
-
-            StyledText {
-                text: clipboardContent.modal.clipboardAvailable ? I18n.tr("No saved clipboard entries") : I18n.tr("Connecting to clipboard service...")
-                anchors.centerIn: parent
-                font.pixelSize: Theme.fontSizeMedium
-                color: Theme.surfaceVariantText
-                visible: clipboardContent.modal.pinnedEntries.length === 0
-            }
-
-            delegate: ClipboardEntry {
-                required property int index
-                required property var modelData
-
-                width: savedListView.width
-                height: ClipboardConstants.itemHeight
-                entry: modelData
-                entryIndex: index + 1
-                itemIndex: index
-                isSelected: clipboardContent.modal?.keyboardNavigationActive && index === clipboardContent.modal.selectedIndex
-                modal: clipboardContent.modal
-                listView: savedListView
-                onCopyRequested: clipboardContent.modal.copyEntry(modelData)
-                onPasteRequested: clipboardContent.modal.pasteEntry(modelData)
-                onDeleteRequested: clipboardContent.modal.deletePinnedEntry(modelData)
-                onPinRequested: targetEntry => clipboardContent.modal.pinEntry(targetEntry)
-                onUnpinRequested: targetEntry => clipboardContent.modal.unpinEntry(targetEntry)
-                onEditRequested: clipboardContent.modal.editEntry(modelData)
+                onRevealRequested: ClipboardService.toggleRevealEntry(modelData)
                 onContextMenuRequested: (mouseX, mouseY) => clipboardContent.showContextMenu(modelData, mouseX, mouseY)
             }
         }
@@ -331,7 +268,7 @@ Item {
             height: 24
             z: 100
             visible: {
-                const listView = modal.activeTab === "recents" ? clipboardListView : savedListView;
+                const listView = clipboardListView;
                 if (listView.contentHeight <= listView.height)
                     return false;
                 const atBottom = listView.contentY >= listView.contentHeight - listView.height - 5;
@@ -373,4 +310,73 @@ Item {
             enterToPaste: SettingsData.clipboardEnterToPaste
         }
     }
+    // ── Move-to-position overlay ──────────────────────────────────────
+    property bool moveMode: false
+
+    Rectangle {
+        id: moveOverlay
+        visible: clipboardContent.moveMode
+        anchors.centerIn: parent
+        width: 240
+        height: 80
+        radius: Theme.cornerRadius
+        color: Theme.floatingWindowSurface
+        border.color: Theme.outlineVariant
+        border.width: 1
+        z: 1000
+
+        Column {
+            anchors.centerIn: parent
+            spacing: Theme.spacingS
+
+            StyledText {
+                text: I18n.tr("Move to position:")
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Rectangle {
+                width: 180; height: 32; radius: Theme.cornerRadiusS
+                color: Theme.surfaceContainerHigh
+                border.color: moveInput.activeFocus ? Theme.primary : Theme.outlineVariant
+                border.width: moveInput.activeFocus ? 2 : 1
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                TextInput {
+                    id: moveInput
+                    anchors.fill: parent
+                    anchors.leftMargin: 8; anchors.rightMargin: 8
+                    color: Theme.surfaceText
+                    font.pixelSize: Theme.fontSizeMedium
+                    horizontalAlignment: Text.AlignHCenter
+                    validator: IntValidator { bottom: 1; top: 9999 }
+                    focus: clipboardContent.moveMode
+                    Keys.onReturnPressed: {
+                        const pos = parseInt(moveInput.text);
+                        if (!isNaN(pos) && pos > 0) {
+                            ClipboardService.moveToPosition(ClipboardService.selectedIndex, pos);
+                        }
+                        clipboardContent.moveMode = false;
+                        moveInput.text = "";
+                    }
+                    Keys.onEscapePressed: {
+                        clipboardContent.moveMode = false;
+                        moveInput.text = "";
+                    }
+                }
+            }
+        }
+
+        // Click outside to cancel
+        MouseArea {
+            anchors.fill: parent
+            z: -1
+            onClicked: {
+                clipboardContent.moveMode = false;
+                moveInput.text = "";
+            }
+        }
+    }
+
 }
