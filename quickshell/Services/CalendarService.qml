@@ -29,7 +29,7 @@ Singleton {
 
     readonly property bool calendarAvailable: activeBackend !== "none"
     readonly property bool isDankActive: activeBackend === "dankcal"
-    readonly property bool canCreateEvents: isDankActive && dankBackend.connected
+    readonly property bool canCreateEvents: isDankActive && dankBackend.connected && dankBackend.writableCalendars().length > 0
     property bool khalAvailable: true // compatibility alias - calendar card UI gate
 
     readonly property bool dankConnected: dankBackend.connected

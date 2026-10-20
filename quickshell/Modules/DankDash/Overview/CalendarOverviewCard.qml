@@ -4,6 +4,7 @@ import qs.Common
 import qs.Services
 import qs.Widgets
 import "../../../Common/DateOnly.js" as DateOnly
+import "Jalali.js" as Jalali
 
 Rectangle {
     id: root
@@ -21,6 +22,14 @@ Rectangle {
     property var detailEvent: null
     property bool showEditor: false
     property var editorEvent: null
+
+    // "gregorian" | "jalali" | "dual" — Settings -> Time & Weather, Date Format card
+    readonly property string persianMode: {
+        const v = SettingsData.calendarPersianMode;
+        return (v === "jalali" || v === "dual") ? v : "gregorian";
+    }
+    readonly property bool persianActive: persianMode !== "gregorian"
+    readonly property bool persianDual: persianMode === "dual"
 
     signal closeDash
     signal navFocusRequested
@@ -299,13 +308,16 @@ Rectangle {
                 height: 40
                 anchors.verticalCenter: parent.verticalCenter
                 text: {
-                    const dateStr = Qt.formatDate(selectedDate, "MMM d");
+                    let dateStr = Qt.formatDate(selectedDate, "MMM d");
+                    if (root.persianActive)
+                        dateStr = Jalali.formatDayMonth(selectedDate) + (root.persianDual ? " • " + dateStr : "");
                     if (selectedDateEvents && selectedDateEvents.length > 0) {
                         const eventCount = selectedDateEvents.length === 1 ? I18n.tr("1 task", "task count next to a date") : I18n.tr("%1 tasks", "task count next to a date, %1 is the number of tasks").arg(selectedDateEvents.length);
                         return dateStr + " • " + eventCount;
                     }
                     return dateStr;
                 }
+                font.family: root.persianActive ? "Vazirmatn" : Qt.application.font.family
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceText
                 font.weight: Font.Medium
@@ -330,7 +342,13 @@ Rectangle {
             StyledText {
                 width: parent.width - 84
                 height: 28
-                text: calendarGrid.displayDate.toLocaleDateString(I18n.locale(), "MMMM yyyy")
+                text: {
+                    const greg = calendarGrid.displayDate.toLocaleDateString(I18n.locale(), "MMMM yyyy");
+                    if (root.persianActive)
+                        return Jalali.formatMonthYear(calendarGrid.displayDate) + (root.persianDual ? " • " + greg : "");
+                    return greg;
+                }
+                font.family: root.persianActive ? "Vazirmatn" : Qt.application.font.family
                 font.pixelSize: Theme.fontSizeMedium
                 color: Theme.surfaceText
                 font.weight: Font.Medium
@@ -429,6 +447,8 @@ Rectangle {
 
                     Repeater {
                         model: {
+                            if (root.persianActive)
+                                return Jalali.dayNamesFrom(root.weekStartJs());
                             const days = [];
                             const qtFirst = weekStartQt();
                             for (let i = 0; i < 7; ++i) {
@@ -446,6 +466,7 @@ Rectangle {
                             StyledText {
                                 anchors.centerIn: parent
                                 text: modelData
+                                font.family: root.persianActive ? "Vazirmatn" : Qt.application.font.family
                                 font.pixelSize: Theme.fontSizeSmall
                                 color: Theme.surfaceTextSecondary
                                 font.weight: Font.Medium
@@ -491,12 +512,27 @@ Rectangle {
                                 border.color: (isSelected && !isToday) ? Theme.primary : Theme.withAlpha(Theme.primary, 0)
                                 border.width: (isSelected && !isToday) ? 1 : 0
 
-                                StyledText {
+                                Column {
                                     anchors.centerIn: parent
-                                    text: dayDate.day
-                                    font.pixelSize: Theme.fontSizeSmall
-                                    color: isToday ? Theme.primary : isCurrentMonth ? Theme.surfaceText : Theme.surfaceVariantText
-                                    font.weight: isToday ? Font.Medium : Font.Normal
+                                    spacing: 0
+
+                                    StyledText {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: root.persianActive ? Jalali.toPersianDigits(Jalali.fromDate(dayDate.toDate()).jd) : String(dayDate.day)
+                                        font.family: root.persianActive ? "Vazirmatn" : Qt.application.font.family
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        color: isToday ? Theme.primary : isCurrentMonth ? Theme.surfaceText : Theme.surfaceVariantText
+                                        font.weight: isToday ? Font.Medium : Font.Normal
+                                    }
+
+                                    StyledText {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        visible: root.persianDual
+                                        text: String(dayDate.day)
+                                        font.pixelSize: Theme.fontSizeSmall - 2
+                                        color: isCurrentMonth ? Theme.surfaceVariantText : Theme.surfaceVariantText
+                                        font.weight: Font.Normal
+                                    }
                                 }
 
                                 Row {

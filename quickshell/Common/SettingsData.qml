@@ -231,6 +231,8 @@ Singleton {
 
     property int firstDayOfWeek: -1
     property bool showWeekNumber: false
+    // Calendar card date system: "gregorian" | "jalali" | "dual"
+    property string calendarPersianMode: "gregorian"
     property string calendarBackend: "auto"
     property string defaultTaskCalendarId: ""
     property bool audioShowStreamDevices: false

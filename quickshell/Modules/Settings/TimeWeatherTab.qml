@@ -120,6 +120,30 @@ Item {
 
                 SettingsDropdownRow {
                     tab: "time"
+                    tags: ["date", "calendar", "persian", "jalali"]
+                    settingKey: "calendarPersianMode"
+                    text: I18n.tr("Persian Dates", "calendar card date-system option")
+                    options: [I18n.tr("Gregorian", "date system option"), I18n.tr("Jalali", "date system option"), I18n.tr("Dual", "date system option")]
+                    currentValue: {
+                        const v = SettingsData.calendarPersianMode;
+                        if (v === "jalali")
+                            return I18n.tr("Jalali", "date system option");
+                        if (v === "dual")
+                            return I18n.tr("Dual", "date system option");
+                        return I18n.tr("Gregorian", "date system option");
+                    }
+                    onValueChanged: value => {
+                        if (value === I18n.tr("Jalali", "date system option"))
+                            SettingsData.set("calendarPersianMode", "jalali");
+                        else if (value === I18n.tr("Dual", "date system option"))
+                            SettingsData.set("calendarPersianMode", "dual");
+                        else
+                            SettingsData.set("calendarPersianMode", "gregorian");
+                    }
+                }
+
+                SettingsDropdownRow {
+                    tab: "time"
                     tags: ["first", "day", "week"]
                     settingKey: "firstDayOfWeek"
                     text: I18n.tr("First Day of Week")

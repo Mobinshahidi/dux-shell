@@ -323,7 +323,9 @@ Item {
     }
 
     function writableCalendars() {
-        return calendars.filter(c => !c.readOnly);
+        // Local .ics accounts (imported Proton snapshots) are view-only in DMS:
+        // editing must happen in Proton itself, never against the snapshot.
+        return calendars.filter(c => !c.readOnly && c.accountKind !== "local");
     }
 
     function defaultCalendar() {
@@ -409,7 +411,8 @@ Item {
         out.color = cal ? cal.color : fallbackPalette[0];
         out.calendar = cal ? cal.name : "";
         out.account = cal ? (cal.accountName || cal.accountId || "") : "";
-        out.readOnly = cal ? !!cal.readOnly : false;
+        // Local .ics accounts (imported Proton snapshots) are view-only in DMS.
+        out.readOnly = cal ? (!!cal.readOnly || cal.accountKind === "local") : false;
         out.isMultiDay = ev.start.toDateString() !== ev.end.toDateString();
         return out;
     }
@@ -568,7 +571,8 @@ Item {
     }
 
     function taskCalendars() {
-        return calendars.filter(c => c.holdsTasks && !c.readOnly);
+        // Local .ics accounts (imported Proton snapshots) are view-only in DMS.
+        return calendars.filter(c => c.holdsTasks && !c.readOnly && c.accountKind !== "local");
     }
 
     function defaultTaskCalendar() {
@@ -587,6 +591,8 @@ Item {
 
     function _taskAsEvent(t) {
         const cal = calendarById(t.calendarId);
+        // Local .ics accounts (imported Proton snapshots) are view-only in DMS.
+        const readOnly = cal ? (!!cal.readOnly || cal.accountKind === "local") : false;
         return {
             "id": "vtodo_" + t.id,
             "title": t.title,
@@ -595,7 +601,7 @@ Item {
             "url": "",
             "calendar": cal ? cal.name : "",
             "color": cal ? cal.color : fallbackPalette[0],
-            "readOnly": cal ? !!cal.readOnly : false,
+            "readOnly": readOnly,
             "start": t.due,
             "end": t.due,
             "allDay": t.allDay,
